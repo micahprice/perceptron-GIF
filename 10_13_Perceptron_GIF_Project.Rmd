@@ -1,0 +1,168 @@
+---
+title: "Making Perceptron GIFs"
+author: "Micah Price"
+date: "October 13, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries_and_functions}
+library('ggplot2')
+library('animation')
+#use dev.off() to reenable plotting in R
+
+#These GIFS cover only single run of PERCEPTRON, so are not at all guaranteed to converge to the right answer. Also, because of the plotting, this function can only handle 2D data.
+
+dot = function(x,y) sum(x*y)
+
+perceptronGIF = function(xs, rate = 1, seed = 13, w_init = c(0,0,0), plot_every = 2) {
+  # xs is a data.frame with columns x, y, and label
+  # plot_every for how often to make a frame of the GIF (every 1,2,3 etc points)
+  # You can change the initial weights (see eq below) but can lead to problematic Perceptron behavior (Don't fully understand) 
+  # Will plot y = -(w1/w2)*x -(w3/w2)*int
+  # from W*Xi = 0, or w1*xi + w2*yi+ w3*int_i=0, where i is a row index representing a single point
+  # updates: W = W-rate*Xi
+  
+  set.seed(seed)
+  label = xs['label']
+  xs = xs[,-4]
+  w = w_init
+  ind = numeric()
+  n=1
+  
+  for (i in sample(nrow(xs))) {
+    #Perceptron
+    xi=xs[i,]
+    guess = dot(xi,w)
+    if (sign(guess)!=label[i,]) {
+      w = w + as.numeric(as.character(label[i,]))*rate*xi
+    } 
+    cat("Row", i, "---", n ,"completed\n")
+    
+    #PLOT
+    ind=c(ind,i)
+    plotme = xs[ind,]
+    #Choose how often to plot perceptron        
+    if (n %% plot_every == 0) {
+      print(
+            #similar, but not the same as graph in code below
+            ggplot(plotme) +  geom_point(aes(x, y, color = label[ind,]), size=3) +
+            geom_abline(intercept=-w[3]/w[2], slope = -w[[1]]/w[[2]],color='slateblue3', size=2.1) + 
+            guides(color=FALSE) + labs(x="", y="") + lims(x=c(-1.1,1.1),  y=c(-1.1,1.1)) +
+            theme(panel.grid.major = element_blank(),
+            axis.text.x=element_blank(),
+            axis.text.y=element_blank(), 
+            axis.ticks=element_blank(), 
+            panel.grid.minor = element_blank(), 
+            panel.background = element_rect(fill='grey97',color = 'slateblue3', size = 3)))
+    } 
+    n=n+1
+  }
+}
+```
+
+``` {r functions_to_make_data}
+# makes random pairs of x, y values in range 0-1 with linear or parabolic seperation.
+# Also adds 'intercept' column to be used in perceptron (defaulted to 1, unsure if changing that value makes any sense)
+# Changing intercept value would affect updates to y intercept
+
+lin_pair = function(m, b, label, n, intercept = 1) {
+# if label = 1 returns random x, y in range -1 to 1 where y > mx+b
+# if label = -1 returns y < mx+b 
+  pairs = data.frame(x = numeric(n), y = numeric(n),intercept = intercept, label = factor(label))
+  for (i in 1:n) {
+    cond = FALSE
+     while (!cond) {
+      x = runif(1, min=-1, max=1)
+      y = runif(1, min=-1, max=1)
+      cond = label * y > label * (m*x + b)
+     }
+    pairs[i,1:2] = c(x,y)
+  }
+ pairs
+}
+
+quad_pair = function(a, b, c, label, n, intercept = 1) {
+# if label = 1 returns random x, y in range -1 to 1 where y > a(x-b)^2 + c
+# if label = -1 returns y < a(x-b)^2 + c  
+  pairs = data.frame(x = numeric(n), y = numeric(n),intercept = intercept, label = factor(label))
+  for(i in 1:n) {  
+    cond = FALSE
+    while (!cond) {
+      x = runif(1, min=-1, max=1)
+      y = runif(1, min=-1, max=1)
+      cond = label * y > label * (a*(x - b)^2 + c)
+    }
+     pairs[i,1:2]=c(x, y)
+  }
+  pairs
+}
+
+norm_pair = function(x, y, label, n, sd = .25, intercept = 1) {
+  # returns data normally distributed around (x,y)
+  data.frame(x = rnorm(n, mean = x, sd), y = rnorm(n, mean = y, sd), intercept = intercept, label = factor(label))
+}
+
+```
+
+``` {r make_data}
+# tweak equations (try seperated and overlapping) and n value (total # points 2n) as desired, then update ggdata so you can plot it below.
+# lin_pair returns y < mx+b
+# quad_pair returns y < a(x-b)^2 + c  
+
+n=10
+tinypairs = rbind(lin_pair(1.5, .2, 1, n), lin_pair(1.5, .05, -1, n))
+#ggdata=tinypairs
+
+n=200
+smallpairs = rbind(lin_pair(1.5, .11 , 1, n), lin_pair(1.5,.03, -1, n))
+#ggdata=smallpairs
+
+n=6000
+bigpairs = rbind(lin_pair(-2.3, .2 , 1, n), lin_pair(-2.3,.8, -1, n))
+#ggdata=bigpairs
+
+n=400
+quadpairs = rbind(quad_pair(2,.2,-.2,1,n), quad_pair(1.7,.25,-.65,-1,n))
+#ggdata=quadpairs
+
+n=200
+normpairs= rbind(norm_pair(.4,-.6,1, n, sd=.13), norm_pair(-.5,.5,-1,n,sd=.17))
+ggdata=normpairs
+
+#plot one of the above sets of pairs (all one line)
+ggplot(ggdata) +  geom_point(aes(x, y, color = label), size=1.5) + guides(color=FALSE) + labs(x="", y="") + lims(x=c(-1.1,1.1),  y=c(-1.1,1.1))  + ggtitle('PERCEPTRON') + theme(panel.grid.major = element_blank(), axis.text.x=element_blank(), axis.text.y=element_blank(), axis.ticks=element_blank(), panel.grid.minor = element_blank(),panel.background = element_rect(fill='grey97',color = 'slateblue3', size = 3), text=element_text (face= "bold", size=30,  color = 'slateblue3'))
+       
+```
+
+```{r make_GIFS}
+# Some examples
+# Will deposit GIF in working directory (?saveGIF for more options)
+
+#use dev.off() to reenable plotting in R
+
+# Command Line can't handle more than 500 images (use plot_every)
+# choose rate (if w initial = 0, doesn't make any difference?) and seed.
+saveGIF({perceptronGIF(smallpairs, rate =.01, seed = 5)}, movie.name = "perceptron400ratepoint01.gif", interval=.05)
+
+saveGIF({perceptronGIF(bigpairs, rate = 10, seed = 5, plot_every = 100)}, movie.name = "test2.gif", interval=.2)
+
+saveGIF({perceptronGIF(quadpairs, rate = 2, seed = 5, plot_every = 3)}, movie.name = "quadperceptron2.gif", interval=.07)
+
+```
+
+``` {r Saved GIFs}
+# normclose: rbind(norm_pair(-.3,-.3,1, n), norm_pair(0,.3,-1,n))
+# normsep: rbind(norm_pair(.5,-.5,1, n, sd=.17), norm_pair(-.5,.3,-1,n,sd=.25))
+# normVsep: rbind(norm_pair(.4,-.6,1, n, sd=.13), norm_pair(-.5,.5,-1,n,sd=.17))
+#linsep: rbind(lin_pair(1.5, .13 , 1, n), lin_pair(1.5,.03, -1, n))
+#linVsep: rbind(lin_pair(1, -.1 , 1, n), lin_pair(1.3,-.6, -1, n))
+#linclose:rbind(lin_pair(-2.3, .2 , 1, n), lin_pair(-2.3,.8, -1, n))
+#quadsep: rbind(quad_pair(2,.2,-.2,1,n), quad_pair(1.7,.25,-.65,-1,n))
+
+# interval:  .5, .3, .2
+# plot_every: 1,  5, 30
+```
